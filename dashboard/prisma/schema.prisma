@@ -1,0 +1,544 @@
+generator client {
+  provider = "prisma-client-js"
+}
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+// Modules append their own models below the CORE block.
+// ===== CORE =====
+model Guild {
+  id            String   @id
+  premium       Boolean  @default(false)
+  configVersion Int      @default(0)
+  modules       Json     @default("{}")
+  staffRoleIds  String[]
+  settings      Json     @default("{}")
+  createdAt     DateTime @default(now())
+}
+model MessageOverride {
+  guildId String
+  key     String
+  value   String
+  @@id([guildId, key])
+}
+model Panel {
+  guildId   String
+  key       String
+  channelId String
+  messageId String?
+  @@id([guildId, key])
+}
+model BotJob {
+  id        String    @id @default(cuid())
+  guildId   String
+  type      String
+  payload   Json      @default("{}")
+  status    String    @default("pending")
+  error     String?
+  createdAt DateTime  @default(now())
+  doneAt    DateTime?
+  @@index([status, createdAt])
+}
+model AuditLog {
+  id        String   @id @default(cuid())
+  guildId   String
+  userId    String
+  action    String
+  details   Json     @default("{}")
+  createdAt DateTime @default(now())
+  @@index([guildId, createdAt])
+}
+model IdempotencyKey {
+  key       String   @id
+  createdAt DateTime @default(now())
+}
+
+// ===== STEP 0: AI quota =====
+model AiUsage {
+  guildId String
+  day     String
+  count   Int    @default(0)
+  @@id([guildId, day])
+}
+
+// ===== STEP 2: STORE =====
+enum OrderStatus {
+  draft
+  awaiting_payment
+  awaiting_confirmation
+  paid
+  delivered
+  cancelled
+  refunded
+  expired
+}
+
+model Product {
+  id                String    @id @default(cuid())
+  guildId           String
+  name              String
+  description       String    @default("")
+  image             String?
+  category          String?
+  active            Boolean   @default(true)
+  stockMode         String    @default("unlimited") // unlimited | limited | keys
+  stockCount        Int       @default(0)
+  sortOrder         Int       @default(0)
+  deliveryType      String    @default("manual") // role | key | message | manual
+  // delivery: { roleId, temporary, durationDays, message, lowStockThreshold, alertChannelId }
+  delivery          Json      @default("{}")
+  lowStockAlertedAt DateTime?
+  createdAt         DateTime  @default(now())
+  packages          Package[]
+  questions         ProductQuestion[]
+  keys              StockKey[]
+  @@index([guildId, sortOrder])
+}
+
+model Package {
+  id             String  @id @default(cuid())
+  productId      String
+  product        Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  name           String
+  priceEgp       Float
+  priceUsd       Float?
+  durationDays   Int?
+  badge          String?
+  active         Boolean @default(true)
+  sortOrder      Int     @default(0)
+  // priceOverrides: { [paymentMethodId]: amount in that method's own currency (before fee/tax) }
+  priceOverrides Json    @default("{}")
+}
+
+model ProductQuestion {
+  id        String   @id @default(cuid())
+  productId String
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  label     String
+  type      String   @default("short") // text | short | number | select
+  required  Boolean  @default(true)
+  options   String[]
+  sortOrder Int      @default(0)
+}
+
+model PaymentMethod {
+  id           String  @id @default(cuid())
+  guildId      String
+  kind         String  // vodafone | probot | custom
+  name         String
+  emoji        String  @default("💳")
+  instructions String  @default("")
+  active       Boolean @default(true)
+  sortOrder    Int     @default(0)
+  // vodafone: { numbers[], feePercent }
+  // probot/custom: { recipientId, botId, regex, taxPercent, rate, currencyName, currencyEmoji, confirmMode: auto|staff }
+  config       Json    @default("{}")
+  @@index([guildId])
+}
+
+model StockKey {
+  id          String    @id @default(cuid())
+  guildId     String
+  productId   String
+  product     Product   @relation(fields: [productId], references: [id], onDelete: Cascade)
+  value       String
+  used        Boolean   @default(false)
+  usedByOrder String?
+  usedAt      DateTime?
+  createdAt   DateTime  @default(now())
+  @@unique([productId, value])
+  @@index([productId, used])
+}
+
+model Coupon {
+  id         String    @id @default(cuid())
+  guildId    String
+  code       String
+  kind       String    @default("percent") // percent | fixed
+  value      Float
+  minOrder   Float     @default(0)
+  expiresAt  DateTime?
+  maxUses    Int?
+  maxPerUser Int?
+  productIds String[]
+  active     Boolean   @default(true)
+  uses       Int       @default(0)
+  createdAt  DateTime  @default(now())
+  @@unique([guildId, code])
+}
+
+model OrderCounter {
+  guildId String @id
+  last    Int    @default(1000)
+}
+
+model Order {
+  id          String      @id @default(cuid())
+  guildId     String
+  number      Int
+  userId      String
+  status      OrderStatus @default(draft)
+  couponId    String?
+  couponCode  String?
+  answers     Json        @default("{}")
+  currency    String      @default("EGP")
+  subtotal    Float       @default(0)
+  discount    Float       @default(0)
+  fee         Float       @default(0)
+  total       Float       @default(0)
+  methodId    String?
+  channelId   String?
+  messageId   String?
+  note        String?
+  rating      Int?
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+  paidAt      DateTime?
+  deliveredAt DateTime?
+  expiresAt   DateTime?
+  items       OrderItem[]
+  payments    Payment[]
+  @@unique([guildId, number])
+  @@index([guildId, status, createdAt])
+  @@index([guildId, userId])
+}
+
+model OrderItem {
+  id          String @id @default(cuid())
+  orderId     String
+  order       Order  @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  productId   String
+  packageId   String
+  productName String
+  packageName String
+  unitPrice   Float
+  qty         Int    @default(1)
+}
+
+model Payment {
+  id                String   @id @default(cuid())
+  orderId           String
+  order             Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  methodId          String
+  amount            Float
+  receiptUrl        String?
+  receiptHash       String?  @unique
+  confirmedBy       String?
+  transferMessageId String?  @unique
+  status            String   @default("pending") // pending | confirmed | rejected
+  createdAt         DateTime @default(now())
+}
+
+model Subscription {
+  id         String    @id @default(cuid())
+  guildId    String
+  userId     String
+  orderId    String
+  roleId     String
+  packageId  String?
+  expiresAt  DateTime
+  remindedAt DateTime?
+  removedAt  DateTime?
+  @@index([guildId, expiresAt])
+}
+
+// ===== STEP 4: SUPPORT TICKETS + KNOWLEDGE BASE =====
+model TicketCategory {
+  id               String   @id @default(cuid())
+  guildId          String
+  name             String
+  emoji            String   @default("🎫")
+  staffRoleIds     String[]
+  parentId         String?
+  questions        Json     @default("[]") // [{label, required, long}] max 5
+  defaultPriority  String   @default("normal") // low | normal | high | urgent
+  greeting         String   @default("")
+  firstResponseMin Int?
+  resolutionMin    Int?
+  escalationRoleId String?
+  sortOrder        Int      @default(0)
+  active           Boolean  @default(true)
+  @@index([guildId])
+}
+
+model TicketCounter {
+  guildId String @id
+  last    Int    @default(0)
+}
+
+model Ticket {
+  id              String    @id @default(cuid())
+  guildId         String
+  number          Int
+  categoryId      String?
+  userId          String
+  channelId       String?
+  messageId       String?
+  status          String    @default("open") // open | closed
+  priority        String    @default("normal")
+  claimedBy       String?
+  answers         Json      @default("{}")
+  openedAt        DateTime  @default(now())
+  firstResponseAt DateTime?
+  closedAt        DateTime?
+  closedBy        String?
+  closeReason     String?
+  rating          Int?
+  ratingComment   String?
+  summary         String?
+  transcript      String?   @db.Text
+  pausedAt        DateTime? // SLA paused while waiting for the customer
+  pausedMs        Int       @default(0)
+  sla             Json      @default("{}") // flags: frWarn, frBreach, resWarn, resBreach
+  lastRemindAt    DateTime?
+  kbChecked       Boolean   @default(false)
+  kbArticleId     String?
+  kbResult        String? // solved | staff
+  @@unique([guildId, number])
+  @@index([guildId, status, openedAt])
+  @@index([channelId])
+}
+
+model KbArticle {
+  id          String   @id @default(cuid())
+  guildId     String
+  question    String
+  keywords    String[]
+  answer      String
+  attachments String[]
+  active      Boolean  @default(true)
+  hits        Int      @default(0)
+  resolved    Int      @default(0)
+  escalated   Int      @default(0)
+  createdAt   DateTime @default(now())
+  @@index([guildId])
+}
+
+// ===== STEP 5: SHIELD =====
+model ShieldDomain {
+  domain  String   @id
+  source  String   @default("")
+  addedAt DateTime @default(now())
+}
+
+model ShieldIncident {
+  id        String   @id @default(cuid())
+  guildId   String
+  userId    String
+  kind      String // scam_link | compromised | raid | gate | manual
+  score     Int      @default(0)
+  action    String   @default("")
+  details   Json     @default("{}")
+  createdAt DateTime @default(now())
+  @@index([guildId, createdAt])
+  @@index([guildId, userId])
+}
+
+model ShieldQuarantine {
+  id         String    @id @default(cuid())
+  guildId    String
+  userId     String
+  roleIds    String[]
+  incidentId String?
+  createdAt  DateTime  @default(now())
+  releasedAt DateTime?
+  releasedBy String?
+  @@index([guildId, userId])
+}
+
+model ShieldLockdown {
+  guildId   String   @id
+  channels  Json     @default("{}") // { channelId: "allow" | "deny" | null } previous @everyone SendMessages state
+  startedAt DateTime @default(now())
+}
+
+model MemberNote {
+  id        String   @id @default(cuid())
+  guildId   String
+  userId    String
+  authorId  String
+  text      String
+  createdAt DateTime @default(now())
+  @@index([guildId, userId])
+}
+
+model BanAppeal {
+  id           String    @id @default(cuid())
+  guildId      String
+  userId       String
+  username     String    @default("")
+  answers      Json      @default("{}")
+  status       String    @default("pending") // pending | accepted | rejected
+  reviewedBy   String?
+  reviewReason String?
+  channelId    String?
+  messageId    String?
+  createdAt    DateTime  @default(now())
+  decidedAt    DateTime?
+  @@index([guildId, userId, createdAt])
+  @@index([guildId, status])
+}
+
+// ===== STEP 6: STAFF TOOLS =====
+model StaffEvent {
+  id        String   @id @default(cuid())
+  guildId   String
+  userId    String
+  kind      String // first_response (value = minutes)
+  value     Float    @default(1)
+  createdAt DateTime @default(now())
+  @@index([guildId, createdAt])
+  @@index([guildId, userId, kind])
+}
+
+model StaffDaily {
+  id       String @id @default(cuid())
+  guildId  String
+  userId   String
+  day      String // YYYY-MM-DD (UTC)
+  messages Int    @default(0)
+  @@unique([guildId, userId, day])
+  @@index([guildId, day])
+}
+
+model StaffIgnore {
+  id      String   @id @default(cuid())
+  guildId String
+  userId  String
+  until   DateTime
+  @@unique([guildId, userId])
+}
+
+model ApplicationForm {
+  id            String   @id @default(cuid())
+  guildId       String
+  name          String
+  description   String   @default("")
+  buttonLabel   String   @default("قدّم الآن")
+  questions     Json     @default("[]") // [{label, type: short|long|number|select, required, options[]}]
+  roleId        String? // granted on acceptance
+  minVotes      Int      @default(3)
+  cooldownDays  Int      @default(7)
+  active        Boolean  @default(true)
+  sortOrder     Int      @default(0)
+  createdAt     DateTime @default(now())
+  @@index([guildId])
+}
+
+model Application {
+  id           String    @id @default(cuid())
+  guildId      String
+  formId       String
+  userId       String
+  answers      Json      @default("[]") // [{q, a}]
+  status       String    @default("pending") // pending | accepted | rejected
+  channelId    String?
+  messageId    String?
+  reviewedBy   String?
+  reviewReason String?
+  createdAt    DateTime  @default(now())
+  decidedAt    DateTime?
+  votes        ApplicationVote[]
+  @@index([guildId, userId, status])
+}
+
+model ApplicationVote {
+  id            String      @id @default(cuid())
+  applicationId String
+  application   Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  userId        String
+  vote          String // up | down | neutral
+  @@unique([applicationId, userId])
+}
+
+// ===== STEP 7: INSIGHTS =====
+model AnalyticsDaily {
+  id               String   @id @default(cuid())
+  guildId          String
+  day              String // YYYY-MM-DD in the guild timezone
+  joined           Int      @default(0)
+  left             Int      @default(0)
+  members          Int      @default(0) // snapshot at aggregation time
+  messages         Int      @default(0)
+  activeMembers    Int      @default(0)
+  byHour           Json     @default("[]") // 24 numbers
+  byChannel        Json     @default("{}") // { channelId: count }
+  orders           Int      @default(0) // opened (non-draft)
+  paidOrders       Int      @default(0)
+  revenue          Float    @default(0)
+  revenueByProduct Json     @default("{}")
+  revenueByMethod  Json     @default("{}")
+  ticketsOpened    Int      @default(0)
+  ticketsClosed    Int      @default(0)
+  shieldIncidents  Int      @default(0)
+  health           Json? // { score, parts[], tips[] } snapshot
+  aggregatedAt     DateTime?
+  @@unique([guildId, day])
+}
+
+model InsightsMsg {
+  id        String @id @default(cuid())
+  guildId   String
+  day       String
+  hour      Int
+  channelId String
+  count     Int    @default(0)
+  @@unique([guildId, day, hour, channelId])
+  @@index([guildId, day])
+}
+
+model MemberDay {
+  id      String @id @default(cuid())
+  guildId String
+  userId  String
+  day     String
+  @@unique([guildId, userId, day])
+  @@index([guildId, day])
+}
+
+model MemberActivity {
+  guildId       String
+  userId        String
+  lastMessageAt DateTime
+  leftAt        DateTime?
+  @@id([guildId, userId])
+  @@index([guildId, lastMessageAt])
+}
+
+model InsightsDigest {
+  id        String   @id @default(cuid())
+  guildId   String
+  weekKey   String
+  data      Json
+  createdAt DateTime @default(now())
+  @@unique([guildId, weekKey])
+}
+
+model AiSummary {
+  id        String   @id @default(cuid())
+  guildId   String
+  day       String
+  channelId String
+  text      String
+  createdAt DateTime @default(now())
+  @@unique([guildId, day, channelId])
+}
+
+// ===== STEP 8: OWNER ADMIN =====
+model Blacklist {
+  id        String   @id @default(cuid())
+  kind      String // guild | user
+  targetId  String
+  reason    String   @default("")
+  by        String
+  createdAt DateTime @default(now())
+  @@unique([kind, targetId])
+}
+
+model BotState {
+  key       String   @id // heartbeat | guilds | maintenance
+  value     Json
+  updatedAt DateTime @updatedAt
+}

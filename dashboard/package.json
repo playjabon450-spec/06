@@ -1,0 +1,29 @@
+{
+  "name": "storebot-dashboard",
+  "private": true,
+  "scripts": {
+    "sync": "node scripts/sync-i18n.js",
+    "dev": "npm run sync && next dev",
+    "build": "npm run sync && next build",
+    "start": "next start",
+    "postinstall": "prisma generate --schema=./prisma/schema.prisma"
+  },
+  "dependencies": {
+    "@prisma/client": "^5.22.0",
+    "next": "14.2.15",
+    "next-auth": "^4.24.8",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "zod": "^3.23.8",
+    "recharts": "^2.12.7"
+  },
+  "devDependencies": {
+    "@types/node": "^20",
+    "@types/react": "^18",
+    "autoprefixer": "^10",
+    "postcss": "^8",
+    "prisma": "^5.22.0",
+    "tailwindcss": "^3.4.13",
+    "typescript": "^5"
+  }
+}

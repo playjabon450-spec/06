@@ -1,0 +1,4 @@
+{"name":"storebot-bot","version":"1.0.0","main":"index.js","engines":{"node":">=20"},
+"scripts":{"start":"node index.js","postinstall":"prisma generate --schema=../prisma/schema.prisma","test":"node --test","seed:store":"node seed-store.js","db:push":"prisma db push --schema=../prisma/schema.prisma"},
+"dependencies":{"@prisma/client":"^5.22.0","discord.js":"^14.16.3","dotenv":"^16.4.5","express":"^4.21.0"},
+"devDependencies":{"prisma":"^5.22.0"}}

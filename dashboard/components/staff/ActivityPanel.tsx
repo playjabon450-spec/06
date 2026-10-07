@@ -1,0 +1,23 @@
+'use client';
+import { useEffect, useState } from 'react';
+import { Bar, BarChart, CartesianGrid, Legend, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
+import { api, inp, Field, useNotice } from '../store/ui';
+const METRICS: Record<string, string> = { points: 'النقاط', closed: 'تذاكر مغلقة', claimed: 'تذاكر مستلمة', orders: 'طلبات مؤكدة', mod: 'إجراءات إشراف', messages: 'رسائل دعم' };
+const m = (v: number | null, unit = 'د') => (v == null ? '—' : v >= 120 ? `${Math.round(v / 60)} س` : `${v} ${unit}`);
+export default function ActivityPanel({ guildId }: { guildId: string }) {
+  const [days, setDays] = useState(7); const [metric, setMetric] = useState('points'); const [d, setD] = useState<any>(null); const [sel, setSel] = useState<string>(''); const nt = useNotice();
+  useEffect(() => { setD(null); api(`/api/guilds/${guildId}/staff/stats?days=${days}`).then(setD).catch(nt.err); }, [days]);
+  const rows = d?.rows || []; const one = rows.find((r: any) => r.userId === sel);
+  return <div className="space-y-4"><div className="grid grid-cols-2 gap-3 max-w-md"><Field label="الفترة"><select className={inp} value={days} onChange={(e) => setDays(Number(e.target.value))}>{[7, 14, 30, 90].map((x) => <option key={x} value={x}>آخر {x} يوم</option>)}</select></Field>
+    <Field label="المقياس"><select className={inp} value={metric} onChange={(e) => setMetric(e.target.value)}>{Object.entries(METRICS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></Field></div>{nt.view}{!d && !nt.n && <p>...</p>}
+    {d && !rows.length && <p className="text-gray-500">لا يوجد نشاط مسجل في هذه الفترة.</p>}
+    {d && rows.length > 0 && <>
+      <div className="grid lg:grid-cols-2 gap-4">
+        <div className="bg-white border rounded-lg p-3"><h3 className="font-bold mb-2">{METRICS[metric]} لكل موظف</h3><div dir="ltr" style={{ width: '100%', height: 280 }}><ResponsiveContainer><BarChart data={rows.slice(0, 15)}><CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="name" tick={{ fontSize: 11 }} /><YAxis allowDecimals={false} /><Tooltip /><Bar dataKey={metric} fill="#1f6f8b" name={METRICS[metric]} /></BarChart></ResponsiveContainer></div></div>
+        <div className="bg-white border rounded-lg p-3"><h3 className="font-bold mb-2">الاتجاه اليومي</h3><div dir="ltr" style={{ width: '100%', height: 280 }}><ResponsiveContainer><LineChart data={d.series}><CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="day" tick={{ fontSize: 11 }} /><YAxis allowDecimals={false} /><Tooltip /><Legend />
+          <Line type="monotone" dataKey="closed" stroke="#1f6f8b" name="تذاكر مغلقة" dot={false} /><Line type="monotone" dataKey="orders" stroke="#e67e22" name="طلبات" dot={false} /><Line type="monotone" dataKey="messages" stroke="#8e44ad" name="رسائل" dot={false} /></LineChart></ResponsiveContainer></div></div></div>
+      <div className="bg-white border rounded-lg overflow-x-auto"><h3 className="font-bold p-3">🏆 لوحة الصدارة</h3><table className="w-full text-sm"><thead className="bg-sand text-right"><tr>{['#', 'الموظف', 'النقاط', 'مستلمة', 'مغلقة', 'أول رد', 'متوسط الحل', 'طلبات', 'إشراف', 'رسائل', 'التقييم'].map((h) => <th key={h} className="p-2">{h}</th>)}</tr></thead>
+        <tbody>{rows.map((r: any, i: number) => <tr key={r.userId} className={`border-t cursor-pointer hover:bg-sand/40 ${sel === r.userId ? 'bg-sand' : ''}`} onClick={() => setSel(sel === r.userId ? '' : r.userId)}><td className="p-2">{['🥇', '🥈', '🥉'][i] || i + 1}</td><td className="p-2 font-medium">{r.name}</td><td className="p-2 font-bold">{r.points}</td><td className="p-2">{r.claimed}</td><td className="p-2">{r.closed}</td><td className="p-2">{m(r.avgFirstResponse)}</td><td className="p-2">{m(r.avgResolution)}</td><td className="p-2">{r.orders}</td><td className="p-2">{r.mod}</td><td className="p-2">{r.messages}</td><td className="p-2">{r.avgRating ? `⭐ ${r.avgRating}` : '—'}</td></tr>)}</tbody></table></div>
+      {one && <div className="bg-white border rounded-lg p-3"><h3 className="font-bold mb-2">{one.name} — تفصيل</h3><div dir="ltr" style={{ width: '100%', height: 220 }}><ResponsiveContainer><BarChart data={[{ n: 'مستلمة', v: one.claimed }, { n: 'مغلقة', v: one.closed }, { n: 'طلبات', v: one.orders }, { n: 'إشراف', v: one.mod }, { n: 'رسائل', v: one.messages }]}><CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="n" /><YAxis allowDecimals={false} /><Tooltip /><Bar dataKey="v" fill="#e67e22" name="العدد" /></BarChart></ResponsiveContainer></div></div>}
+      <p className="text-xs text-gray-500">النقاط = مستلمة×2 + مغلقة×3 + طلبات×2 + إشراف + رسائل×0.1 + (متوسط التقييم−3)×5. الرسائل تُحسب داخل التذاكر وقنوات الدعم المحددة فقط.</p></>}</div>;
+}

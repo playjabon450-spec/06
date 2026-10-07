@@ -1,0 +1,1 @@
+module.exports = { content: ['./app/**/*.{ts,tsx}', './components/**/*.{ts,tsx}'], theme: { extend: { fontFamily: { sans: ['Tajawal', 'system-ui', 'sans-serif'] }, colors: { ink: '#14202b', sea: '#1f6f8b', sand: '#f2efe8' } } } };

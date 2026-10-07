@@ -1,0 +1,22 @@
+'use client';
+import { useEffect, useState } from 'react';
+import { Bar, BarChart, CartesianGrid, Legend, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
+import { api, inp, Field, useNotice } from '../store/ui';
+const Box = ({ title, children }: any) => <div className="bg-white border rounded-lg p-3"><h3 className="font-bold mb-2 text-sm">{title}</h3><div dir="ltr" style={{ width: '100%', height: 250 }}><ResponsiveContainer>{children}</ResponsiveContainer></div></div>;
+export default function OverviewPanel({ guildId }: { guildId: string }) {
+  const [days, setDays] = useState(30); const [d, setD] = useState<any>(null); const nt = useNotice();
+  useEffect(() => { setD(null); api(`/api/guilds/${guildId}/insights/overview?days=${days}`).then(setD).catch(nt.err); }, [days]);
+  const T = d?.totals; const cards = T && [['الأعضاء', T.members || '—'], ['انضم', T.joined], ['غادر', T.left], ['الرسائل', T.messages], ['متوسط النشطين يومياً', T.activeAvg], ['الإيراد', T.revenue], ['طلبات مدفوعة', `${T.paid}/${T.orders}`], ['تذاكر (فُتحت/أُغلقت)', `${T.ticketsOpened}/${T.ticketsClosed}`], ['حوادث حماية', T.shield]];
+  return <div className="space-y-4"><div className="max-w-xs"><Field label="الفترة"><select className={inp} value={days} onChange={(e) => setDays(Number(e.target.value))}>{[7, 30, 60, 90].map((x) => <option key={x} value={x}>آخر {x} يوم</option>)}</select></Field></div>{nt.view}{!d && !nt.n && <p>...</p>}
+    {d && !d.hasData && <p className="bg-yellow-50 text-yellow-800 rounded p-3 text-sm">لا توجد بيانات مجمّعة بعد. التجميع يتم ليلاً لليوم السابق؛ ستظهر الرسوم بعد أول ليلة من تفعيل البوت.</p>}
+    {d && d.hasData && <><div className="grid grid-cols-2 md:grid-cols-5 gap-3">{cards!.map(([l, v]: any) => <div key={l} className="bg-white border rounded-lg p-3 text-center"><div className="text-xl font-bold">{v}</div><div className="text-xs text-gray-500">{l}</div></div>)}</div>
+      <div className="grid lg:grid-cols-2 gap-4">
+        <Box title="نمو الأعضاء (انضم / غادر)"><LineChart data={d.series}><CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="day" tick={{ fontSize: 10 }} /><YAxis allowDecimals={false} /><Tooltip /><Legend /><Line dataKey="joined" name="انضم" stroke="#27ae60" dot={false} /><Line dataKey="left" name="غادر" stroke="#c0392b" dot={false} /></LineChart></Box>
+        <Box title="الرسائل والنشطون يومياً"><LineChart data={d.series}><CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="day" tick={{ fontSize: 10 }} /><YAxis allowDecimals={false} /><Tooltip /><Legend /><Line dataKey="messages" name="رسائل" stroke="#1f6f8b" dot={false} /><Line dataKey="active" name="نشطون" stroke="#8e44ad" dot={false} /></LineChart></Box>
+        <Box title="الرسائل حسب الساعة (بتوقيت السيرفر)"><BarChart data={d.hours}><CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="h" tick={{ fontSize: 10 }} /><YAxis allowDecimals={false} /><Tooltip /><Bar dataKey="n" name="رسائل" fill="#1f6f8b" /></BarChart></Box>
+        <Box title="أنشط القنوات"><BarChart data={d.topChannels} layout="vertical"><CartesianGrid strokeDasharray="3 3" /><XAxis type="number" allowDecimals={false} /><YAxis type="category" dataKey="name" width={110} tick={{ fontSize: 11 }} /><Tooltip /><Bar dataKey="n" name="رسائل" fill="#e67e22" /></BarChart></Box>
+        <Box title="الإيراد اليومي والطلبات"><LineChart data={d.series}><CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="day" tick={{ fontSize: 10 }} /><YAxis /><Tooltip /><Legend /><Line dataKey="revenue" name="الإيراد" stroke="#16a085" dot={false} /><Line dataKey="paid" name="مدفوعة" stroke="#2980b9" dot={false} /></LineChart></Box>
+        <Box title="الإيراد حسب المنتج"><BarChart data={d.byProduct}><CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="name" tick={{ fontSize: 10 }} /><YAxis /><Tooltip /><Bar dataKey="n" name="الإيراد" fill="#16a085" /></BarChart></Box>
+        <Box title="الإيراد حسب طريقة الدفع"><BarChart data={d.byMethod}><CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="name" tick={{ fontSize: 10 }} /><YAxis /><Tooltip /><Bar dataKey="n" name="الإيراد" fill="#2980b9" /></BarChart></Box></div>
+      {d.aiSummaries?.length > 0 && <div className="bg-white border rounded-lg p-3 space-y-2"><h3 className="font-bold">🧠 ملخصات AI الأخيرة</h3>{d.aiSummaries.map((a: any) => <div key={a.id} className="text-sm border-t pt-2"><b>{a.day}</b> — <span className="font-mono text-xs" dir="ltr">{a.channelId}</span><p className="whitespace-pre-wrap text-gray-700">{a.text}</p></div>)}</div>}</>}</div>;
+}
