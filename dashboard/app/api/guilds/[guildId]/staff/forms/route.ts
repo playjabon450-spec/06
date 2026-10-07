@@ -9,7 +9,7 @@ const schema = z.object({ id: z.string().max(40).optional(), name: z.string().tr
 export const GET = guildRoute(null, async ({ guildId }) => ({ forms: await prisma.applicationForm.findMany({ where: { guildId }, orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }] }) }));
 export const POST = guildRoute(schema, async ({ guildId, uid, body }) => {
   const { id, ...d } = body; const data = { ...d, roleId: d.roleId ?? null };
-  if (id) { const r = await prisma.applicationForm.updateMany({ where: { id, guildId }, data }); if (!r.count) throw new Error('الاستمارة غير موجودة'); } else { if ((await prisma.applicationForm.count({ where: { guildId } })) >= 10) throw new Error('الحد الأقصى 10 استمارات'); await prisma.applicationForm.create({ data: { ...data, guildId } }); }
+  if (id) { const r = await prisma.applicationForm.updateMany({ where: { id, guildId }, data }); if (!r.count) throw new Error('الاستمارة غير موجودة'); } else { if ((await prisma.applicationForm.count({ where: { guildId } })) >= 10) throw new Error('الحد الأقصى 10 استمارات'); await prisma.applicationForm.create({ data: { ...data, guildId } as any }); }
   await audit(guildId, uid, id ? 'staff.form.update' : 'staff.form.create', { name: d.name }); return { ok: true };
 });
 export const DELETE = guildRoute(null, async ({ guildId, uid, req }) => { const id = new URL(req.url).searchParams.get('id') || ''; if (await prisma.application.count({ where: { guildId, formId: id, status: 'pending' } })) throw new Error('توجد طلبات قيد المراجعة على هذه الاستمارة، عطّلها بدلاً من الحذف'); await prisma.applicationForm.deleteMany({ where: { id, guildId } }); await audit(guildId, uid, 'staff.form.delete', { id }); return { ok: true }; });

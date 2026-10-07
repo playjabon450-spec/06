@@ -91,7 +91,7 @@ function KeysBox({ guildId, product, onChange }: { guildId: string; product: any
   async function rm(id: string) { try { await api(`${url}?id=${id}`, 'DELETE'); load(); onChange(); } catch (e) { nt.err(e); } }
   return <div className="border rounded p-3 space-y-2 bg-sand/40"><h4 className="font-medium">مخزون المفاتيح: {keys.filter((k) => !k.used).length} متاح</h4>
     <Field label="إضافة مفاتيح بالجملة" hint="مفتاح في كل سطر (أو ملف CSV: العمود الأول). المكرر يُتجاهل تلقائياً."><textarea dir="ltr" className={inp} rows={5} value={text} onChange={(e) => setText(e.target.value)} /></Field>
-    <input type="file" accept=".csv,.txt" onChange={async (e) => { const f = e.target.files?.[0]; if (f) setText((t) => (t ? t + '\n' : '') + (await f.text())); }} />
+    <input type="file" accept=".csv,.txt" onChange={async (e) => { const f = e.target.files?.[0]; if (!f) return; const nextText = await f.text(); setText((t) => (t ? t + '\n' : '') + nextText); }} />
     <div className="flex gap-2"><Btn disabled={!text.trim()} onClick={add}>إضافة المفاتيح</Btn><Btn kind="ghost" onClick={() => setOpen(!open)}>{open ? 'إخفاء' : 'عرض'} المفاتيح</Btn></div>{nt.view}
     {open && <div className="max-h-48 overflow-y-auto text-xs font-mono space-y-1" dir="ltr">{keys.map((k) => <div key={k.id} className="flex justify-between bg-white border rounded px-2 py-1"><span className={k.used ? 'line-through text-gray-400' : ''}>{k.value}</span>{!k.used && <button className="text-red-600" onClick={() => rm(k.id)}>حذف</button>}</div>)}</div>}</div>;
 }

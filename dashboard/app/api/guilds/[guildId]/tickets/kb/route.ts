@@ -8,7 +8,7 @@ export const GET = guildRoute(null, async ({ guildId }) => {
 });
 export const POST = guildRoute(kbSchema, async ({ guildId, uid, body }) => {
   const { id, ...data } = body;
-  if (id) { const r = await prisma.kbArticle.updateMany({ where: { id, guildId }, data }); if (!r.count) throw new Error('المقال غير موجود'); } else await prisma.kbArticle.create({ data: { ...data, guildId } });
+  if (id) { const r = await prisma.kbArticle.updateMany({ where: { id, guildId }, data }); if (!r.count) throw new Error('المقال غير موجود'); } else await prisma.kbArticle.create({ data: { ...data, guildId } as any });
   await audit(guildId, uid, id ? 'tickets.kb.update' : 'tickets.kb.create', { question: data.question }); return { ok: true };
 });
 export const DELETE = guildRoute(null, async ({ guildId, uid, req }) => { const id = new URL(req.url).searchParams.get('id') || ''; await prisma.kbArticle.deleteMany({ where: { id, guildId } }); await audit(guildId, uid, 'tickets.kb.delete', { id }); return { ok: true }; });

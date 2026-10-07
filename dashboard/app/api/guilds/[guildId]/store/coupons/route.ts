@@ -9,7 +9,7 @@ export const POST = guildRoute(couponSchema, async ({ guildId, uid, body }) => {
   const { id, expiresAt, ...d } = body; const data = { ...d, expiresAt: expiresAt ? new Date(expiresAt) : null, maxUses: d.maxUses ?? null, maxPerUser: d.maxPerUser ?? null };
   try {
     if (id) { const r = await prisma.coupon.updateMany({ where: { id, guildId }, data }); if (!r.count) throw new Error('الكوبون غير موجود'); }
-    else await prisma.coupon.create({ data: { ...data, guildId } });
+    else await prisma.coupon.create({ data: { ...data, guildId } as any });
   } catch (e: any) { if (e.code === 'P2002') throw new Error('هذا الكود مستخدم بالفعل'); throw e; }
   await audit(guildId, uid, id ? 'store.coupon.update' : 'store.coupon.create', { code: d.code }); return { ok: true };
 });

@@ -12,13 +12,13 @@ export const POST = guildRoute(productSchema, async ({ guildId, uid, body }) => 
   const pid = await prisma.$transaction(async (tx) => {
     let productId = id;
     if (id) { const ex = await tx.product.findFirst({ where: { id, guildId } }); if (!ex) throw new Error('المنتج غير موجود'); await tx.product.update({ where: { id }, data }); }
-    else productId = (await tx.product.create({ data: { ...data, guildId } })).id;
+    else productId = (await tx.product.create({ data: { ...data, guildId } as any })).id;
     const keepP = packages.filter((p) => p.id).map((p) => p.id as string), keepQ = questions.filter((q) => q.id).map((q) => q.id as string);
     await tx.package.deleteMany({ where: { productId, id: { notIn: keepP } } }); await tx.productQuestion.deleteMany({ where: { productId, id: { notIn: keepQ } } });
     for (const p of packages) { const { id: x, ...d } = p; const row = { ...d, priceUsd: d.priceUsd ?? null, durationDays: d.durationDays ?? null, badge: d.badge || null };
-      if (x && (await tx.package.count({ where: { id: x, productId } }))) await tx.package.update({ where: { id: x }, data: row }); else await tx.package.create({ data: { ...row, productId } }); }
+      if (x && (await tx.package.count({ where: { id: x, productId } }))) await tx.package.update({ where: { id: x }, data: row }); else await tx.package.create({ data: { ...row, productId } as any }); }
     for (const q of questions) { const { id: x, ...d } = q;
-      if (x && (await tx.productQuestion.count({ where: { id: x, productId } }))) await tx.productQuestion.update({ where: { id: x }, data: d }); else await tx.productQuestion.create({ data: { ...d, productId } }); }
+      if (x && (await tx.productQuestion.count({ where: { id: x, productId } }))) await tx.productQuestion.update({ where: { id: x }, data: d }); else await tx.productQuestion.create({ data: { ...d, productId } as any }); }
     return productId as string;
   });
   await audit(guildId, uid, id ? 'store.product.update' : 'store.product.create', { id: pid, name: data.name });
