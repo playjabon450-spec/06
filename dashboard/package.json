@@ -3,9 +3,9 @@
   "private": true,
   "scripts": {
     "sync": "node scripts/sync-i18n.js",
-    "dev": "npm run sync && next dev",
+    "dev": "npm run sync && next dev --hostname 0.0.0.0 --port 3000",
     "build": "npm run sync && next build",
-    "start": "next start",
+    "start": "next start --hostname 0.0.0.0 --port 3000",
     "postinstall": "prisma generate --schema=./prisma/schema.prisma"
   },
   "dependencies": {
