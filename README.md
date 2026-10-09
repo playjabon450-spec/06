@@ -39,7 +39,7 @@ openssl rand -base64 32  # ← NEXTAUTH_SECRET
 cd bot && npm install && npm run db:push        # إنشاء الجداول (يُعاد بعد كل تحديث للمخطط)
 npm test                                         # اختبارات الوحدة
 npm start                                        # تشغيل البوت
-cd ../dashboard && npm install && npm run dev    # اللوحة على http://localhost:3000
+cd  dashboard && npm install && npm run dev  # اللوحة على http://localhost:3000
 npm run seed:store -- <guildId>                  # (اختياري، من مجلد bot) بيانات تجريبية للمتجر
 ```
 
@@ -49,9 +49,10 @@ npm run seed:store -- <guildId>                  # (اختياري، من مجل
 ## 7) النشر (المسار المجاني)
 **اللوحة → Vercel:** استورد المستودع واجعل **Root Directory = `dashboard`** (مهم: الـ `Dockerfile` في الجذر خاص بالبوت فقط). أضف متغيرات البيئة، و`NEXTAUTH_URL` = رابط الدومين النهائي. أمر البناء الافتراضي يكفي (`postinstall` يولّد Prisma).
 
-**البوت** يحتاج عملية تعمل 24 ساعة. خيارات شائعة (الحدود المجانية تتغير، تحقق منها وقت النشر):
+**نشر كامل على VPS بدومين (Docker):** انسخ `.env.example` إلى `.env`، واملأ بيانات Discord وكلمات مرور عشوائية. وجّه سجل DNS من نوع `A` للدومين إلى عنوان الخادم، وافتح TCP `80/443` في الجدار الناري، ثم اجعل `DASHBOARD_DOMAIN` و`NEXTAUTH_URL` يطابقان الدومين مع `https`. شغّل `docker compose up -d --build` من جذر المشروع؛ سيُنشئ الجداول، ويشغّل PostgreSQL والبوت واللوحة، ويتولى Caddy إصدار HTTPS وتجديده. لا تفتح المنفذين `3000` أو `5432` للعامة. أضف إلى Discord OAuth2 Redirects العنوان `https://دومينك/api/auth/callback/discord`، ثم ادعُ البوت إلى سيرفرك. بعد تغييرات `prisma/schema.prisma` شغّل `docker compose run --rm db-init`.
+
+**بدائل الاستضافة المنفصلة:**
 - **Oracle Cloud Always Free (VM):** الأكثر استقراراً للتشغيل الدائم. ثبّت Node 20 وPM2 ثم: `cd bot && npm i --omit=dev && npx prisma generate --schema=../prisma/schema.prisma && cd .. && pm2 start ecosystem.config.js && pm2 save && pm2 startup`.
-- **Docker:** `docker compose up -d --build` (الملف جاهز، المنفذ 3001).
 - **منصات مجانية تُنيم الخدمة عند الخمول (Render/Koyeb…):** استخدم خدمة ويب تشغّل `node bot/index.js` وافتح لها فحص صحة `/health`، ثم أضف مراقباً في **UptimeRobot** (HTTP(s) كل 5 دقائق) على `https://رابط-البوت/health` حتى لا تنام. ملاحظة: النوم المتكرر يوقف الجداول الزمنية (تقارير/اشتراكات) مؤقتاً لكنها تستكمل عند الاستيقاظ.
 
 ## 8) النسخ الاحتياطي لقاعدة البيانات

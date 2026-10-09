@@ -1,22 +1,103 @@
+x-database-environment: &database-environment
+  DATABASE_URL: postgresql://${POSTGRES_USER:-storebot}:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}@db:5432/${POSTGRES_DB:-storebot}?schema=public
+  DIRECT_URL: postgresql://${POSTGRES_USER:-storebot}:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}@db:5432/${POSTGRES_DB:-storebot}?schema=public
+
 services:
   db:
     image: postgres:16-alpine
-    restart: always
+    restart: unless-stopped
     environment:
-      POSTGRES_DB: storebot
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: ${POSTGRES_DB:-storebot}
+      POSTGRES_USER: ${POSTGRES_USER:-storebot}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
     volumes:
       - postgres_data:/var/lib/postgresql/data
-    ports: ["5432:5432"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+
+  db-init:
+    build: .
+    working_dir: /app/bot
+    command: ["npx", "prisma", "db", "push", "--schema=../prisma/schema.prisma"]
+    restart: "no"
+    environment: *database-environment
+    depends_on:
+      db:
+        condition: service_healthy
 
   bot:
     build: .
-    restart: always
-    env_file: .env
+    restart: unless-stopped
+    environment:
+      <<: *database-environment
+      DISCORD_TOKEN: ${DISCORD_TOKEN:?Set DISCORD_TOKEN in .env}
+      OWNER_IDS: ${OWNER_IDS:-}
+      PORT: 3001
+      GROQ_API_KEY: ${GROQ_API_KEY:-}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      STRICT_PREMIUM: ${STRICT_PREMIUM:-}
+      CONFIG_POLL_MS: ${CONFIG_POLL_MS:-5000}
+      JOB_POLL_MS: ${JOB_POLL_MS:-3000}
+      SHIELD_BLOCKLIST_URLS: ${SHIELD_BLOCKLIST_URLS:-}
     depends_on:
-      - db
-    ports: ["3001:3001"]
+      db-init:
+        condition: service_completed_successfully
+    expose:
+      - "3001"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3001/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  dashboard:
+    build:
+      context: .
+      dockerfile: dashboard/Dockerfile
+    restart: unless-stopped
+    environment:
+      <<: *database-environment
+      DISCORD_TOKEN: ${DISCORD_TOKEN:?Set DISCORD_TOKEN in .env}
+      DISCORD_CLIENT_ID: ${DISCORD_CLIENT_ID:?Set DISCORD_CLIENT_ID in .env}
+      DISCORD_CLIENT_SECRET: ${DISCORD_CLIENT_SECRET:?Set DISCORD_CLIENT_SECRET in .env}
+      NEXTAUTH_URL: ${NEXTAUTH_URL:?Set NEXTAUTH_URL in .env}
+      NEXTAUTH_SECRET: ${NEXTAUTH_SECRET:?Set NEXTAUTH_SECRET in .env}
+      OWNER_IDS: ${OWNER_IDS:-}
+      PORT: 3000
+      NODE_ENV: production
+    depends_on:
+      db-init:
+        condition: service_completed_successfully
+    expose:
+      - "3000"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3000/api/auth/providers"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 40s
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    environment:
+      DASHBOARD_DOMAIN: ${DASHBOARD_DOMAIN:?Set DASHBOARD_DOMAIN in .env}
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      dashboard:
+        condition: service_healthy
 
 volumes:
   postgres_data:
+  caddy_data:
+  caddy_config:
