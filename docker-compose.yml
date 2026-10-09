@@ -1,6 +1,22 @@
 services:
+  db:
+    image: postgres:16-alpine
+    restart: always
+    environment:
+      POSTGRES_DB: storebot
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports: ["5432:5432"]
+
   bot:
     build: .
     restart: always
     env_file: .env
+    depends_on:
+      - db
     ports: ["3001:3001"]
+
+volumes:
+  postgres_data:
